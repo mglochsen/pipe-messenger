@@ -36,5 +36,9 @@ namespace PipeMessenger.Sample.Common
 
             return responseBytes;
         }
+
+        public virtual void Dispose()
+        {
+        }
     }
 }

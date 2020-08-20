@@ -11,24 +11,23 @@ namespace PipeMessenger
     public class Messenger : IDisposable
     {
         private readonly IMessageSerializer _messageSerializer;
-        private readonly PipeBase _pipe;
+        private readonly IPipe _pipe;
+        private readonly IMessageHandler _handler;
 
         private readonly IDictionary<string, TaskCompletionSource<byte[]>> _pendingRequests = new ConcurrentDictionary<string, TaskCompletionSource<byte[]>>();
 
-        private IMessageHandler _handler;
 
-        internal Messenger(Func<PipeBase> pipeCreator, IMessageSerializer messageSerializer)
+        internal Messenger(Func<IPipe> pipeCreator, IMessageHandler handler, IMessageSerializer messageSerializer)
         {
-            _messageSerializer = messageSerializer;
+            _handler = handler ?? throw new ArgumentNullException(nameof(handler));
+            _messageSerializer = messageSerializer ?? throw new ArgumentNullException(nameof(messageSerializer));
             _pipe = pipeCreator();
         }
 
         public bool IsConnected => _pipe.IsConnected;
 
-        public void Init(IMessageHandler handler, CancellationToken? cancellationToken = null)
+        public void Init(CancellationToken? cancellationToken = null)
         {
-            _handler = handler ?? throw new ArgumentNullException(nameof(handler));
-
             var token = cancellationToken ?? CancellationToken.None;
             _pipe.Init(
                 () => _handler.OnConnected(),
@@ -59,7 +58,7 @@ namespace PipeMessenger
 
         public void Dispose()
         {
-            _handler = null;
+            _handler.Dispose();
             _pendingRequests.Clear();
             _pipe?.Dispose();
         }

@@ -1,6 +1,8 @@
-﻿namespace PipeMessenger.Contracts
+﻿using System;
+
+namespace PipeMessenger.Contracts
 {
-    public interface IMessageHandler
+    public interface IMessageHandler : IDisposable
     {
         void OnConnected();
 

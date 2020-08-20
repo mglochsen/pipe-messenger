@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace PipeMessenger.Pipes
 {
-    internal abstract class PipeBase : IDisposable
+    internal abstract class PipeBase : IPipe
     {
         private readonly PipeStream _pipeStream;
         private readonly CancellationTokenSource _readCancellationTokenSource;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using System.Threading.Tasks;
 using PipeMessenger.Sample.Common;
 
 namespace PipeMessenger.Sample.Server
@@ -15,12 +16,11 @@ namespace PipeMessenger.Sample.Server
             _cancellationToken = cancellationTokenSource.Token;
 
             Console.WriteLine("Creating server messenger");
-            var messenger = MessengerFactory.CreateServerMessenger("SampleMessenger", new JsonMessageSerializer());
-            var handler = new ServerMessageHandler(payloadBytes => messenger.SendRequestAsync(payloadBytes));
-            _messenger = messenger;
+            var handler = new ServerMessageHandler(SendRequestAsync);
+            _messenger = MessengerFactory.CreateServerMessenger("SampleMessenger", handler, new JsonMessageSerializer());
             
             Console.WriteLine("Initializing server messenger");
-            _messenger.Init(handler, _cancellationToken);
+            _messenger.Init(_cancellationToken);
             
             Console.WriteLine("[Press enter to exit]");
             Console.ReadLine();
@@ -28,6 +28,11 @@ namespace PipeMessenger.Sample.Server
             cancellationTokenSource.Cancel();
             _messenger.Dispose();
             _messenger = null;
+        }
+
+        static Task<byte[]> SendRequestAsync(byte[] payloadBytes)
+        {
+            return _messenger.SendRequestAsync(payloadBytes);
         }
     }
 }
