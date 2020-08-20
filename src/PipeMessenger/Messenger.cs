@@ -30,9 +30,9 @@ namespace PipeMessenger
         {
             var token = cancellationToken ?? CancellationToken.None;
             _pipe.Init(
-                () => _handler.OnConnected(),
-                () => _handler.OnDisconnected(),
-                DataReceived,
+                OnConnected,
+                OnDisconnected,
+                OnDataReceived,
                 token);
         }
 
@@ -73,7 +73,17 @@ namespace PipeMessenger
             await _pipe.WriteAsync(data).ConfigureAwait(false);
         }
 
-        private async void DataReceived(byte[] data)
+        private void OnConnected()
+        {
+            _handler.OnConnected();
+        }
+
+        private void OnDisconnected()
+        {
+            _handler.OnDisconnected();
+        }
+
+        private async void OnDataReceived(byte[] data)
         {
             var message = _messageSerializer.Deserialize(data);
             switch (message.Type)
@@ -94,8 +104,6 @@ namespace PipeMessenger
                     }
 
                     break;
-                default:
-                    throw new ArgumentOutOfRangeException();
             }
         }
 
