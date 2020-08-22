@@ -6,7 +6,7 @@
     <PackageId>PipeMessenger</PackageId>
     <Description>A .NET standard library to send and receive messages via named pipes encapsulating the inner mechanisms.</Description>
     <Product>PipeMessenger</Product>
-    <PackageTags>named pipes messenger messaging message messages request response</PackageTags>
+    <PackageTags>ipc named pipes messenger message request response</PackageTags>
     <PackageProjectUrl>https://github.com/mglochsen/pipe-messenger</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
