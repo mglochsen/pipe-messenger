@@ -10,17 +10,15 @@ namespace PipeMessenger
 {
     public class Messenger : IDisposable
     {
-        private readonly IMessageSerializer _messageSerializer;
         private readonly IPipe _pipe;
         private readonly IMessageHandler _handler;
 
-        private readonly IDictionary<string, TaskCompletionSource<byte[]>> _pendingRequests = new ConcurrentDictionary<string, TaskCompletionSource<byte[]>>();
+        private readonly IDictionary<Guid, TaskCompletionSource<byte[]>> _pendingRequests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>();
 
 
-        internal Messenger(Func<IPipe> pipeCreator, IMessageHandler handler, IMessageSerializer messageSerializer)
+        internal Messenger(Func<IPipe> pipeCreator, IMessageHandler handler)
         {
             _handler = handler ?? throw new ArgumentNullException(nameof(handler));
-            _messageSerializer = messageSerializer ?? throw new ArgumentNullException(nameof(messageSerializer));
             _pipe = pipeCreator();
         }
 
@@ -38,20 +36,20 @@ namespace PipeMessenger
 
         public async Task SendWithoutResponseAsync(byte[] payload)
         {
-            var id = Guid.NewGuid().ToString();
-            var data = CreateAndSerializeMessage(id, MessageType.FireAndForget, payload);
+            var message = new Message(Guid.NewGuid(), MessageType.FireAndForget, payload);
+            var data = MessageSerializer.SerializeMessage(message);
             await WriteAsync(data).ConfigureAwait(false);
         }
 
         public async Task<byte[]> SendRequestAsync(byte[] payload)
         {
-            var id = Guid.NewGuid().ToString();
-            var data = CreateAndSerializeMessage(id, MessageType.Request, payload);
+            var message = new Message(Guid.NewGuid(), MessageType.Request, payload);
+            var data = MessageSerializer.SerializeMessage(message);
 
             await WriteAsync(data).ConfigureAwait(false);
 
             var tsc = new TaskCompletionSource<byte[]>();
-            _pendingRequests.Add(id, tsc);
+            _pendingRequests.Add(message.Id, tsc);
 
             return await tsc.Task.ConfigureAwait(false);
         }
@@ -85,7 +83,7 @@ namespace PipeMessenger
 
         private async void OnDataReceived(byte[] data)
         {
-            var message = _messageSerializer.Deserialize(data);
+            var message = MessageSerializer.DeserializeMessage(data);
             switch (message.Type)
             {
                 case MessageType.FireAndForget:
@@ -93,7 +91,8 @@ namespace PipeMessenger
                     break;
                 case MessageType.Request:
                     var response = _handler.OnRequestMessage(message.Payload);
-                    var responseData = CreateAndSerializeMessage(message.Id, MessageType.Response, response);
+                    var responseMessage = new Message(message.Id, MessageType.Response, response);
+                    var responseData = MessageSerializer.SerializeMessage(responseMessage);
                     await WriteAsync(responseData).ConfigureAwait(false);
                     break;
                 case MessageType.Response:
@@ -105,18 +104,6 @@ namespace PipeMessenger
 
                     break;
             }
-        }
-
-        private byte[] CreateAndSerializeMessage(string id, MessageType messageType, byte[] payload)
-        {
-            var message = new Message
-            {
-                Id = id,
-                Type = messageType,
-                Payload = payload
-            };
-
-            return _messageSerializer.Serialize(message);
         }
     }
 }

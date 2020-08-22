@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using PipeMessenger.Sample.Common;
 
 namespace PipeMessenger.Sample.Client
 {
@@ -17,7 +16,7 @@ namespace PipeMessenger.Sample.Client
 
             Console.WriteLine("Creating client messenger");
             var handler = new ClientMessageHandler(SendWithoutResponseAsync, _cancellationToken);
-            _messenger = MessengerFactory.CreateClientMessenger("SampleMessenger", handler, new JsonMessageSerializer());
+            _messenger = MessengerFactory.CreateClientMessenger("SampleMessenger", handler);
 
             Console.WriteLine("Initializing client messenger");
             _messenger.Init(_cancellationToken);

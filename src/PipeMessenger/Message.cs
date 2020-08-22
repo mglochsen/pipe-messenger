@@ -1,11 +1,20 @@
-﻿namespace PipeMessenger
+﻿using System;
+
+namespace PipeMessenger
 {
-    public sealed class Message
+    internal class Message
     {
-        public string Id { get; set; }
+        public Message(Guid id, MessageType type, byte[] payload)
+        {
+            Id = id;
+            Type = type;
+            Payload = payload;
+        }
 
-        public MessageType Type { get; set; }
+        public Guid Id { get; }
 
-        public byte[] Payload { get; set; }
+        public MessageType Type { get; }
+
+        public byte[] Payload { get; }
     }
 }

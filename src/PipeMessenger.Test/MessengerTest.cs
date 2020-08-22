@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -42,43 +43,41 @@ namespace PipeMessenger.Test
         }
 
         [Fact]
-        public async Task SendWithoutResponseAsync_SerializesAndWritesMessage()
+        public async Task SendWithoutResponseAsync_WritesMessage()
         {
             // Arrange
+            var writtenBytes = new byte[0];
             var pipeMock = new Mock<IPipe>();
             pipeMock
                 .SetupGet(pipe => pipe.IsConnected)
                 .Returns(true);
-            var serializedMessage = new byte[] { 0, 8, 15 };
-            var messageSerializerMock = new Mock<IMessageSerializer>();
-            messageSerializerMock
-                .Setup(serializer => serializer.Serialize(It.IsAny<Message>()))
-                .Returns(serializedMessage);
+            pipeMock
+                .Setup(pipe => pipe.WriteAsync(It.IsAny<byte[]>()))
+                .Callback<byte[]>(bytes => writtenBytes = bytes);
             var payload = new byte[] { 1, 2, 3 };
-            var target = CreateMessenger(pipeMock.Object, messageSerializer: messageSerializerMock.Object);
+            var target = CreateMessenger(pipeMock.Object);
 
             // Act
             await target.SendWithoutResponseAsync(payload);
 
             // Assert
-            messageSerializerMock.Verify(
-                serializer => serializer.Serialize(It.Is<Message>(message => message.Type == MessageType.FireAndForget)),
-                Times.Once());
             pipeMock.Verify(
-                pipe => pipe.WriteAsync(serializedMessage),
+                pipe => pipe.WriteAsync(It.IsAny<byte[]>()),
                 Times.Once());
+            writtenBytes.Should().HaveCount(17 + payload.Length);
+            writtenBytes[16].Should().Be((byte)MessageType.FireAndForget);
+            writtenBytes.Skip(17).Should().BeEquivalentTo(payload);
         }
 
         [Fact]
         public async Task SendRequestAsync_GetsExpectedResponse()
         {
             // Arrange
+            var writtenBytes = new byte[0];
             Action<byte[]> dataReceivedAction = null;
 
-            string messageId = null;
             var requestPayload = new byte[] { 1, 2, 3 };
-            var response = new byte[] { 4, 5, 6 };
-            var responsePayload = new byte[] {7, 8, 9 };
+            var responsePayload = new byte[] { 7, 8, 9 };
 
             var pipeMock = new Mock<IPipe>();
             pipeMock
@@ -87,25 +86,22 @@ namespace PipeMessenger.Test
             pipeMock
                 .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
                 .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => dataReceivedAction = dataReceived);
-            
-            var messageSerializerMock = new Mock<IMessageSerializer>();
-            messageSerializerMock
-                .Setup(serializer => serializer.Serialize(It.Is<Message>(message => message.Type == MessageType.Request)))
-                .Callback<Message>(message => messageId = message.Id);
-            messageSerializerMock
-                .Setup(serializer => serializer.Deserialize(response))
-                .Returns(() => new Message { Id = messageId, Type = MessageType.Response, Payload = responsePayload });
-            
-            var target = CreateMessenger(pipeMock.Object, messageSerializer: messageSerializerMock.Object);
+            pipeMock
+                .Setup(pipe => pipe.WriteAsync(It.IsAny<byte[]>()))
+                .Callback<byte[]>(bytes => writtenBytes = bytes);
+
+            var target = CreateMessenger(pipeMock.Object);
             target.Init(CancellationToken.None);
 
             // Act
             var sendRequestTask = target.SendRequestAsync(requestPayload);
-            dataReceivedAction(response);
+            var messageId = MessageSerializer.DeserializeMessage(writtenBytes).Id;
+            var responseMessage = new Message(messageId, MessageType.Response, responsePayload);
+            dataReceivedAction(MessageSerializer.SerializeMessage(responseMessage));
             var requestResult = await sendRequestTask;
 
             // Assert
-            requestResult.Should().BeSameAs(responsePayload);
+            requestResult.Should().BeEquivalentTo(responsePayload);
         }
 
         [Fact]
@@ -158,34 +154,30 @@ namespace PipeMessenger.Test
         {
             // Arrange
             Action<byte[]> dataReceivedAction = null;
-            var serializedMessage = new byte[] { 1, 2, 3 };
-            var messagePayload = new byte[] { 4, 5, 6 };
+            var message = new Message(Guid.NewGuid(), MessageType.FireAndForget, new byte[] { 1, 2, 3 });
+            var serializedMessage = MessageSerializer.SerializeMessage(message);
 
             var pipeMock = new Mock<IPipe>();
             pipeMock
                 .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
                 .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => dataReceivedAction = dataReceived);
             var handlerMock = new Mock<IMessageHandler>();
-            var messageSerializerMock = new Mock<IMessageSerializer>();
-            messageSerializerMock
-                .Setup(serializer => serializer.Deserialize(serializedMessage))
-                .Returns(() => new Message { Type = MessageType.FireAndForget, Payload = messagePayload });
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object, messageSerializerMock.Object);
+            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
             target.Init(CancellationToken.None);
 
             // Act
             dataReceivedAction(serializedMessage);
 
             // Assert
-            handlerMock.Verify(handler => handler.OnMessageWithoutResponse(messagePayload), Times.Once());
+            handlerMock.Verify(handler => handler.OnMessageWithoutResponse(message.Payload), Times.Once());
         }
 
         [Fact] public void MessengerHandlesRequestMessages()
         {
             // Arrange
             Action<byte[]> dataReceivedAction = null;
-            var serializedMessage = new byte[] { 1, 2, 3 };
-            var messagePayload = new byte[] { 4, 5, 6 };
+            var message = new Message(Guid.NewGuid(), MessageType.Request, new byte[] { 1, 2, 3 });
+            var serializedMessage = MessageSerializer.SerializeMessage(message);
 
             var pipeMock = new Mock<IPipe>();
             pipeMock
@@ -195,18 +187,14 @@ namespace PipeMessenger.Test
                 .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
                 .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => dataReceivedAction = dataReceived);
             var handlerMock = new Mock<IMessageHandler>();
-            var messageSerializerMock = new Mock<IMessageSerializer>();
-            messageSerializerMock
-                .Setup(serializer => serializer.Deserialize(serializedMessage))
-                .Returns(() => new Message { Type = MessageType.Request, Payload = messagePayload });
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object, messageSerializerMock.Object);
+            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
             target.Init(CancellationToken.None);
 
             // Act
             dataReceivedAction(serializedMessage);
 
             // Assert
-            handlerMock.Verify(handler => handler.OnRequestMessage(messagePayload), Times.Once());
+            handlerMock.Verify(handler => handler.OnRequestMessage(message.Payload), Times.Once());
         }
 
         [Fact] public void Dispose_DisposesObjects()
@@ -224,15 +212,11 @@ namespace PipeMessenger.Test
             handlerMock.Verify(handler => handler.Dispose(), Times.Once());
         }
 
-        private static Messenger CreateMessenger(
-            IPipe pipe,
-            IMessageHandler handler = null,
-            IMessageSerializer messageSerializer = null)
+        private static Messenger CreateMessenger(IPipe pipe, IMessageHandler handler = null)
         {
             return new Messenger(
-                () => pipe ?? new Mock<IPipe>().Object,
-                handler ?? new Mock<IMessageHandler>().Object,
-                messageSerializer ?? new Mock<IMessageSerializer>().Object);
+                () => pipe,
+                handler ?? new Mock<IMessageHandler>().Object);
         }
     }
 }

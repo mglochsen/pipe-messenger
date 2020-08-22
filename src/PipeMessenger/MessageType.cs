@@ -1,6 +1,6 @@
 ﻿namespace PipeMessenger
 {
-    public enum MessageType
+    internal enum MessageType : byte
     {
         FireAndForget = 0,
         Request = 1,
