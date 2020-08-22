@@ -12,7 +12,7 @@ namespace PipeMessenger.Pipes
         private readonly CancellationTokenSource _readCancellationTokenSource;
         private readonly CancellationTokenSource _writeCancellationTokenSource;
 
-        private bool _wasConnected = false;
+        private bool _wasConnected;
 
         protected PipeBase(PipeStream pipeStream)
         {

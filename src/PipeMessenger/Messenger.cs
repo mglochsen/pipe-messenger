@@ -8,13 +8,12 @@ using PipeMessenger.Pipes;
 
 namespace PipeMessenger
 {
-    public class Messenger : IDisposable
+    public sealed class Messenger : IDisposable
     {
         private readonly IPipe _pipe;
         private readonly IMessageHandler _handler;
 
         private readonly IDictionary<Guid, TaskCompletionSource<byte[]>> _pendingRequests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>();
-
 
         internal Messenger(Func<IPipe> pipeCreator, IMessageHandler handler)
         {
