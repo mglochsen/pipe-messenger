@@ -351,3 +351,4 @@ MigrationBackup/
 
 # NCrunch
 *.ncrunchsolution
+*.ncrunchproject
