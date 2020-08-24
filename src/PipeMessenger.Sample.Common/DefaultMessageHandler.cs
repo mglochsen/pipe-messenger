@@ -4,7 +4,7 @@ using PipeMessenger.Contracts;
 
 namespace PipeMessenger.Sample.Common
 {
-    public abstract class MessageHandlerBase : IMessageHandler
+    public class DefaultMessageHandler : IMessageHandler
     {
         protected bool IsConnected { get; private set; }
 

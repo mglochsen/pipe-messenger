@@ -1,37 +1,32 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using PipeMessenger.Sample.Common;
 
 namespace PipeMessenger.Sample.Server
 {
     class Program
     {
         static IMessenger _messenger;
-        static CancellationToken _cancellationToken;
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             var cancellationTokenSource = new CancellationTokenSource();
-            _cancellationToken = cancellationTokenSource.Token;
+            var cancellationToken = cancellationTokenSource.Token;
 
             Console.WriteLine("Creating server messenger");
-            var handler = new ServerMessageHandler(SendRequestAsync);
+            var handler = new DefaultMessageHandler();
             _messenger = MessengerFactory.CreateServerMessenger("SampleMessenger", handler, true);
             
             Console.WriteLine("Initializing server messenger");
-            _messenger.Init(_cancellationToken);
-            
-            Console.WriteLine("[Press enter to exit]");
-            Console.ReadLine();
+            _messenger.Init(cancellationToken);
+
+            var consoleMessenger = new ConsoleMessenger();
+            await consoleMessenger.StartAsync(_messenger);
 
             cancellationTokenSource.Cancel();
             _messenger.Dispose();
             _messenger = null;
-        }
-
-        static Task<byte[]> SendRequestAsync(byte[] payloadBytes)
-        {
-            return _messenger.SendRequestAsync(payloadBytes);
         }
     }
 }

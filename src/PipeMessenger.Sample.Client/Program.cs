@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using PipeMessenger.Sample.Common;
 
 namespace PipeMessenger.Sample.Client
 {
@@ -9,29 +10,24 @@ namespace PipeMessenger.Sample.Client
         static IMessenger _messenger;
         static CancellationToken _cancellationToken;
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             var cancellationTokenSource = new CancellationTokenSource();
             _cancellationToken = cancellationTokenSource.Token;
 
             Console.WriteLine("Creating client messenger");
-            var handler = new ClientMessageHandler(SendWithoutResponseAsync, _cancellationToken);
+            var handler = new DefaultMessageHandler();
             _messenger = MessengerFactory.CreateClientMessenger("SampleMessenger", handler, true);
 
             Console.WriteLine("Initializing client messenger");
             _messenger.Init(_cancellationToken);
 
-            Console.WriteLine("[Press enter to exit]");
-            Console.ReadLine();
+            var consoleMessenger = new ConsoleMessenger();
+            await consoleMessenger.StartAsync(_messenger);
 
             cancellationTokenSource.Cancel();
             _messenger.Dispose();
             _messenger = null;
-        }
-
-        static Task SendWithoutResponseAsync(byte[] payload)
-        {
-            return _messenger.SendWithoutResponseAsync(payload);
         }
     }
 }
