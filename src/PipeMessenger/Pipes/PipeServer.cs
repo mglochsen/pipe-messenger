@@ -7,7 +7,7 @@ namespace PipeMessenger.Pipes
     internal class PipeServer : PipeBase
     {
         public PipeServer(string pipeName)
-            : base(() => new NamedPipeServerStream(pipeName, PipeDirection.InOut))
+            : base(() => CreatePipeStream(pipeName))
         {
         }
 
@@ -15,6 +15,11 @@ namespace PipeMessenger.Pipes
         {
             var serverPipeStream = (NamedPipeServerStream)pipeStream;
             return serverPipeStream.WaitForConnectionAsync(cancellationToken);
+        }
+
+        private static PipeStream CreatePipeStream(string pipeName)
+        {
+            return new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         }
     }
 }

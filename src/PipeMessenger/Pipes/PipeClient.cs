@@ -7,7 +7,7 @@ namespace PipeMessenger.Pipes
     internal class PipeClient : PipeBase
     {
         public PipeClient(string pipeName)
-            : base(() => new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
+            : base(() => CreatePipeStream(pipeName))
         {
         }
 
@@ -15,6 +15,11 @@ namespace PipeMessenger.Pipes
         {
             var clientPipeStream = (NamedPipeClientStream)pipeStream;
             return clientPipeStream.ConnectAsync(cancellationToken);
+        }
+
+        private static PipeStream CreatePipeStream(string pipeName)
+        {
+            return new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         }
     }
 }
