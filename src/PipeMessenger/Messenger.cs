@@ -8,7 +8,7 @@ using PipeMessenger.Pipes;
 
 namespace PipeMessenger
 {
-    public sealed class Messenger : IDisposable
+    public sealed class Messenger : IMessenger
     {
         private readonly IPipe _pipe;
         private readonly IMessageHandler _handler;

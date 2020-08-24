@@ -6,7 +6,7 @@ namespace PipeMessenger.Sample.Server
 {
     class Program
     {
-        static Messenger _messenger;
+        static IMessenger _messenger;
         static CancellationToken _cancellationToken;
 
         static void Main(string[] args)
