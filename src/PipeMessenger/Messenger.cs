@@ -12,12 +12,14 @@ namespace PipeMessenger
     {
         private readonly IPipe _pipe;
         private readonly IMessageHandler _handler;
+        private readonly bool _enableReconnect;
 
         private readonly IDictionary<Guid, TaskCompletionSource<byte[]>> _pendingRequests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>();
 
-        internal Messenger(Func<IPipe> pipeCreator, IMessageHandler handler)
+        internal Messenger(Func<IPipe> pipeCreator, IMessageHandler handler, bool enableReconnect)
         {
             _handler = handler ?? throw new ArgumentNullException(nameof(handler));
+            _enableReconnect = enableReconnect;
             _pipe = pipeCreator();
         }
 
@@ -78,6 +80,11 @@ namespace PipeMessenger
         private void OnDisconnected()
         {
             _handler.OnDisconnected();
+
+            if (_enableReconnect)
+            {
+                _pipe.Reconnect(OnConnected, OnDisconnected, OnDataReceived);
+            }
         }
 
         private async void OnDataReceived(byte[] data)

@@ -8,24 +8,36 @@ namespace PipeMessenger.Pipes
 {
     internal abstract class PipeBase : IPipe
     {
-        private readonly PipeStream _pipeStream;
+        private readonly Func<PipeStream> _pipeStreamCreator;
         private readonly CancellationTokenSource _readCancellationTokenSource;
         private readonly CancellationTokenSource _writeCancellationTokenSource;
 
+        private PipeStream _pipeStream;
+
         private bool _wasConnected;
 
-        protected PipeBase(PipeStream pipeStream)
+        protected PipeBase(Func<PipeStream> pipeStreamCreator)
         {
-            _pipeStream = pipeStream;
+            _pipeStreamCreator = pipeStreamCreator ?? throw new ArgumentNullException(nameof(pipeStreamCreator));
             _readCancellationTokenSource = new CancellationTokenSource();
             _writeCancellationTokenSource = new CancellationTokenSource();
         }
 
-        public bool IsConnected => _pipeStream.IsConnected;
+        public bool IsConnected => _pipeStream?.IsConnected ?? false;
 
         public async void Init(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction, CancellationToken cancellationToken)
         {
+            _pipeStream = _pipeStreamCreator();
             await ConnectPipeAsync(_pipeStream, cancellationToken).ConfigureAwait(false);
+            connectedAction?.Invoke();
+            _wasConnected = true;
+            StartPipeObservation(_pipeStream, dataReceivedAction, disconnectedAction, _readCancellationTokenSource.Token);
+        }
+
+        public async void Reconnect(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction)
+        {
+            _pipeStream = _pipeStreamCreator();
+            await ConnectPipeAsync(_pipeStream, CancellationToken.None).ConfigureAwait(false);
             connectedAction?.Invoke();
             _wasConnected = true;
             StartPipeObservation(_pipeStream, dataReceivedAction, disconnectedAction, _readCancellationTokenSource.Token);
@@ -45,7 +57,7 @@ namespace PipeMessenger.Pipes
         {
             _readCancellationTokenSource.Dispose();
             _writeCancellationTokenSource.Dispose();
-            _pipeStream.Dispose();
+            _pipeStream?.Dispose();
         }
 
         protected abstract Task ConnectPipeAsync(PipeStream pipeStream, CancellationToken cancellationToken);
@@ -65,8 +77,7 @@ namespace PipeMessenger.Pipes
                 {
                     if (_wasConnected)
                     {
-                        disconnectedAction?.Invoke();
-                        _wasConnected = false;
+                        HandleDisconnected(disconnectedAction);
                     }
                 }
                 else
@@ -79,8 +90,7 @@ namespace PipeMessenger.Pipes
                     {
                         if (_wasConnected)
                         {
-                            disconnectedAction?.Invoke();
-                            _wasConnected = false;
+                            HandleDisconnected(disconnectedAction);
                         }
                     }
                     else
@@ -89,6 +99,13 @@ namespace PipeMessenger.Pipes
                     }
                 }
             }
+        }
+
+        private void HandleDisconnected(Action disconnectedAction)
+        {
+            _pipeStream.Dispose();
+            disconnectedAction?.Invoke();
+            _wasConnected = false;
         }
     }
 }

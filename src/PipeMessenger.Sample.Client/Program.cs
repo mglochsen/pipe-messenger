@@ -16,7 +16,7 @@ namespace PipeMessenger.Sample.Client
 
             Console.WriteLine("Creating client messenger");
             var handler = new ClientMessageHandler(SendWithoutResponseAsync, _cancellationToken);
-            _messenger = MessengerFactory.CreateClientMessenger("SampleMessenger", handler);
+            _messenger = MessengerFactory.CreateClientMessenger("SampleMessenger", handler, true);
 
             Console.WriteLine("Initializing client messenger");
             _messenger.Init(_cancellationToken);

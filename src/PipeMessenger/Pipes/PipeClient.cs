@@ -7,7 +7,7 @@ namespace PipeMessenger.Pipes
     internal class PipeClient : PipeBase
     {
         public PipeClient(string pipeName)
-            : base(new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
+            : base(() => new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous))
         {
         }
 

@@ -10,6 +10,8 @@ namespace PipeMessenger.Pipes
 
         void Init(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction, CancellationToken cancellationToken);
 
+        void Reconnect(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction);
+
         Task WriteAsync(byte[] data);
     }
 }

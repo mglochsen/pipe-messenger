@@ -30,6 +30,24 @@ namespace PipeMessenger.Test
         }
 
         [Fact]
+        public void IsConnectedGetsValueFromPipe()
+        {
+            // Arrange
+            var pipeMock = new Mock<IPipe>();
+            pipeMock.SetupGet(pipe => pipe.IsConnected).Returns(true);
+            var target = CreateMessenger(pipeMock.Object);
+
+            // Act
+            var isConnected = target.IsConnected;
+
+            // Assert
+            isConnected.Should().BeTrue();
+            pipeMock.VerifyGet(
+                pipe => pipe.IsConnected,
+                Times.Once());
+        }
+
+        [Fact]
         public void SendWithoutResponseAsync_ThrowsException_WhenNotConnected()
         {
             // Arrange
@@ -150,6 +168,52 @@ namespace PipeMessenger.Test
             handlerMock.Verify(handler => handler.OnDisconnected(), Times.Once());
         }
 
+        [Fact]
+        public void MessengerDoesNotReconnect_WhenDisabled()
+        {
+            // Arrange
+            Action disconnectedAction = null;
+
+            var pipeMock = new Mock<IPipe>();
+            pipeMock
+                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
+                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => disconnectedAction = disconnected);
+
+            var handlerMock = new Mock<IMessageHandler>();
+
+            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
+            target.Init(CancellationToken.None);
+
+            // Act
+            disconnectedAction();
+
+            // Assert
+            pipeMock.Verify(pipe => pipe.Reconnect(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>()), Times.Never());
+        }
+
+        [Fact]
+        public void MessengerReconnects_WhenEnabled()
+        {
+            // Arrange
+            Action disconnectedAction = null;
+
+            var pipeMock = new Mock<IPipe>();
+            pipeMock
+                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
+                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => disconnectedAction = disconnected);
+
+            var handlerMock = new Mock<IMessageHandler>();
+
+            var target = CreateMessenger(pipeMock.Object, handlerMock.Object, true);
+            target.Init(CancellationToken.None);
+
+            // Act
+            disconnectedAction();
+
+            // Assert
+            pipeMock.Verify(pipe => pipe.Reconnect(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>()), Times.Once());
+        }
+
         [Fact] public void MessengerHandlesFireAndForgetMessages()
         {
             // Arrange
@@ -212,11 +276,12 @@ namespace PipeMessenger.Test
             handlerMock.Verify(handler => handler.Dispose(), Times.Once());
         }
 
-        private static Messenger CreateMessenger(IPipe pipe, IMessageHandler handler = null)
+        private static Messenger CreateMessenger(IPipe pipe, IMessageHandler handler = null, bool enableReconnect = false)
         {
             return new Messenger(
                 () => pipe,
-                handler ?? new Mock<IMessageHandler>().Object);
+                handler ?? new Mock<IMessageHandler>().Object,
+                enableReconnect);
         }
     }
 }
