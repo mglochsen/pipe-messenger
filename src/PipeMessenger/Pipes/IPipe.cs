@@ -8,7 +8,9 @@ namespace PipeMessenger.Pipes
     {
         bool IsConnected { get; }
 
-        void Init(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction, CancellationToken cancellationToken);
+        void Init(Action connectedAction, CancellationToken cancellationToken);
+
+        void StartPipeObservation(Action<byte[]> dataReceivedAction, Action disconnectedAction);
 
         void Reconnect(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction);
 

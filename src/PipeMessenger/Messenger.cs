@@ -28,11 +28,8 @@ namespace PipeMessenger
         public void Init(CancellationToken? cancellationToken = null)
         {
             var token = cancellationToken ?? CancellationToken.None;
-            _pipe.Init(
-                OnConnected,
-                OnDisconnected,
-                OnDataReceived,
-                token);
+            _pipe.Init(OnConnected, token);
+            _pipe.StartPipeObservation(OnDataReceived, OnDisconnected);
         }
 
         public async Task SendWithoutResponseAsync(byte[] payload)

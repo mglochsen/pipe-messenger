@@ -25,12 +25,29 @@ namespace PipeMessenger.Test
 
             // Assert
             pipeMock.Verify(
-                pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), cancellationToken),
+                pipe => pipe.Init(It.IsAny<Action>(), cancellationToken),
                 Times.Once());
         }
 
         [Fact]
-        public void IsConnectedGetsValueFromPipe()
+        public void Init_StartsPipeObservation()
+        {
+            // Arrange
+            var pipeMock = new Mock<IPipe>();
+            var cancellationToken = new CancellationToken();
+            var target = CreateMessenger(pipeMock.Object);
+
+            // Act
+            target.Init(cancellationToken);
+
+            // Assert
+            pipeMock.Verify(
+                pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()),
+                Times.Once());
+        }
+
+        [Fact]
+        public void IsConnected_GetsValueFromPipe()
         {
             // Arrange
             var pipeMock = new Mock<IPipe>();
@@ -102,8 +119,8 @@ namespace PipeMessenger.Test
                 .SetupGet(pipe => pipe.IsConnected)
                 .Returns(true);
             pipeMock
-                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
-                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => dataReceivedAction = dataReceived);
+                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
+                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => dataReceivedAction = dataReceived);
             pipeMock
                 .Setup(pipe => pipe.WriteAsync(It.IsAny<byte[]>()))
                 .Callback<byte[]>(bytes => writtenBytes = bytes);
@@ -130,8 +147,8 @@ namespace PipeMessenger.Test
 
             var pipeMock = new Mock<IPipe>();
             pipeMock
-                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
-                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => connectedAction = connected);
+                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
+                .Callback<Action, CancellationToken>((connected,token) => connectedAction = connected);
 
             var handlerMock = new Mock<IMessageHandler>();
             
@@ -153,8 +170,8 @@ namespace PipeMessenger.Test
 
             var pipeMock = new Mock<IPipe>();
             pipeMock
-                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
-                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => disconnectedAction = disconnected);
+                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
+                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => disconnectedAction = disconnected);
 
             var handlerMock = new Mock<IMessageHandler>();
 
@@ -176,8 +193,8 @@ namespace PipeMessenger.Test
 
             var pipeMock = new Mock<IPipe>();
             pipeMock
-                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
-                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => disconnectedAction = disconnected);
+                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
+                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => disconnectedAction = disconnected);
 
             var handlerMock = new Mock<IMessageHandler>();
 
@@ -199,8 +216,8 @@ namespace PipeMessenger.Test
 
             var pipeMock = new Mock<IPipe>();
             pipeMock
-                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
-                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => disconnectedAction = disconnected);
+                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
+                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => disconnectedAction = disconnected);
 
             var handlerMock = new Mock<IMessageHandler>();
 
@@ -223,8 +240,8 @@ namespace PipeMessenger.Test
 
             var pipeMock = new Mock<IPipe>();
             pipeMock
-                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
-                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => dataReceivedAction = dataReceived);
+                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
+                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => dataReceivedAction = dataReceived);
             var handlerMock = new Mock<IMessageHandler>();
             var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
             target.Init(CancellationToken.None);
@@ -248,8 +265,8 @@ namespace PipeMessenger.Test
                 .SetupGet(pipe => pipe.IsConnected)
                 .Returns(true);
             pipeMock
-                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>(), It.IsAny<CancellationToken>()))
-                .Callback<Action, Action, Action<byte[]>, CancellationToken>((connected, disconnected, dataReceived, token) => dataReceivedAction = dataReceived);
+                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
+                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => dataReceivedAction = dataReceived);
             var handlerMock = new Mock<IMessageHandler>();
             var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
             target.Init(CancellationToken.None);

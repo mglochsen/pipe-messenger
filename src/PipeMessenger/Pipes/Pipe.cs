@@ -24,13 +24,17 @@ namespace PipeMessenger.Pipes
 
         public bool IsConnected => _pipeStream?.IsConnected ?? false;
 
-        public async void Init(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction, CancellationToken cancellationToken)
+        public async void Init(Action connectedAction, CancellationToken cancellationToken)
         {
             _pipeStream?.Dispose();
             _pipeStream = _pipeStreamCreator();
             await _pipeStream.ConnectAsync(cancellationToken).ConfigureAwait(false);
             connectedAction?.Invoke();
             _wasConnected = true;
+        }
+
+        public void StartPipeObservation(Action<byte[]> dataReceivedAction, Action disconnectedAction)
+        {
             StartPipeObservation(_pipeStream, dataReceivedAction, disconnectedAction, _readCancellationTokenSource.Token);
         }
 
@@ -41,7 +45,7 @@ namespace PipeMessenger.Pipes
             await _pipeStream.ConnectAsync(CancellationToken.None).ConfigureAwait(false);
             connectedAction?.Invoke();
             _wasConnected = true;
-            StartPipeObservation(_pipeStream, dataReceivedAction, disconnectedAction, _readCancellationTokenSource.Token);
+            StartPipeObservation(dataReceivedAction, disconnectedAction);
         }
 
         public Task WriteAsync(byte[] data)
