@@ -16,7 +16,7 @@ namespace PipeMessenger.Pipes
 
         private static PipeStream CreatePipeServerStream(string pipeName)
         {
-            return new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+            return new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Message, PipeOptions.Asynchronous);
         }
 
         private static PipeStream CreatePipeClientStream(string pipeName)

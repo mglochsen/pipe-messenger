@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO.Pipes;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using PipeMessenger.Extensions;
 
 namespace PipeMessenger.Pipes
 {
@@ -24,13 +27,9 @@ namespace PipeMessenger.Pipes
 
         public bool IsConnected => _pipeStream?.IsConnected ?? false;
 
-        public async void Init(Action connectedAction, CancellationToken cancellationToken)
+        public void Init(Action connectedAction, CancellationToken cancellationToken)
         {
-            _pipeStream?.Dispose();
-            _pipeStream = _pipeStreamCreator();
-            await _pipeStream.ConnectAsync(cancellationToken).ConfigureAwait(false);
-            connectedAction?.Invoke();
-            _wasConnected = true;
+            CreateAndConnectPipeAsync(cancellationToken).Await(ex => {}, connectedAction, false);
         }
 
         public void StartPipeObservation(Action<byte[]> dataReceivedAction, Action disconnectedAction)
@@ -38,24 +37,17 @@ namespace PipeMessenger.Pipes
             StartPipeObservation(_pipeStream, dataReceivedAction, disconnectedAction, _readCancellationTokenSource.Token);
         }
 
-        public async void Reconnect(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction)
+        public void Reconnect(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction)
         {
-            _pipeStream?.Dispose();
-            _pipeStream = _pipeStreamCreator();
-            await _pipeStream.ConnectAsync(CancellationToken.None).ConfigureAwait(false);
-            connectedAction?.Invoke();
-            _wasConnected = true;
+            CreateAndConnectPipeAsync(CancellationToken.None).Await(ex => { }, connectedAction, false);
             StartPipeObservation(dataReceivedAction, disconnectedAction);
         }
 
-        public Task WriteAsync(byte[] data)
+        public async Task WriteAsync(byte[] data)
         {
             if (data == null) throw new ArgumentNullException(nameof(data));
 
-            var dataLength = BitConverter.GetBytes(data.Length);
-            var bytes = dataLength.Concat(data).ToArray();
-
-            return _pipeStream.WriteAsync(bytes, 0, bytes.Length, _writeCancellationTokenSource.Token);
+            await _pipeStream.WriteAsync(data, 0, data.Length, _writeCancellationTokenSource.Token).ConfigureAwait(false);
         }
 
         public void Dispose()
@@ -63,6 +55,19 @@ namespace PipeMessenger.Pipes
             _readCancellationTokenSource.Dispose();
             _writeCancellationTokenSource.Dispose();
             _pipeStream?.Dispose();
+        }
+
+        private async Task CreateAndConnectPipeAsync(CancellationToken cancellationToken)
+        {
+            _pipeStream?.Dispose();
+            _pipeStream = _pipeStreamCreator();
+            await _pipeStream.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            if (_pipeStream.ReadMode != PipeTransmissionMode.Message)
+            {
+                _pipeStream.ReadMode = PipeTransmissionMode.Message;
+            }
+
+            _wasConnected = true;
         }
 
         private void StartPipeObservation(IPipeStream pipeStream, Action<byte[]> dataReceivedAction, Action disconnectedAction, CancellationToken cancellationToken)
@@ -73,36 +78,27 @@ namespace PipeMessenger.Pipes
             Task.Run(
                 async () =>
                 {
-                    var bufferSize = sizeof(int);
-                    var buffer = new byte[bufferSize];
-
                     while (IsConnected && !cancellationToken.IsCancellationRequested)
                     {
-                        var readBytes = await pipeStream.ReadAsync(buffer, 0, bufferSize, cancellationToken).ConfigureAwait(false);
-                        if (readBytes == 0)
-                        {
-                            if (_wasConnected)
-                            {
-                                HandleDisconnected(disconnectedAction);
-                            }
-                        }
-                        else
-                        {
-                            var dataLength = BitConverter.ToInt32(buffer, 0);
-                            var data = new byte[dataLength];
+                        var message = new List<byte>();
+                        var messageBuffer = new byte[5];
 
-                            var readDataBytes = await pipeStream.ReadAsync(data, 0, dataLength, cancellationToken).ConfigureAwait(false);
-                            if (readDataBytes == 0)
+                        do
+                        {
+                            var readBytes = await pipeStream.ReadAsync(messageBuffer, 0, messageBuffer.Length).ConfigureAwait(false);
+                            if (readBytes != 0)
                             {
-                                if (_wasConnected)
-                                {
-                                    HandleDisconnected(disconnectedAction);
-                                }
+                                message.AddRange(messageBuffer.Take(readBytes));
                             }
-                            else
-                            {
-                                dataReceivedAction(data);
-                            }
+                        } while (!pipeStream.IsMessageComplete);
+
+                        if (message.Any())
+                        {
+                            dataReceivedAction(message.ToArray());
+                        }
+                        else if (_wasConnected)
+                        {
+                            HandleDisconnected(disconnectedAction);
                         }
                     }
                 },
