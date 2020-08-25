@@ -65,43 +65,48 @@ namespace PipeMessenger.Pipes
             _pipeStream?.Dispose();
         }
 
-        private async void StartPipeObservation(IPipeStream pipeStream, Action<byte[]> dataReceivedAction, Action disconnectedAction, CancellationToken cancellationToken)
+        private void StartPipeObservation(IPipeStream pipeStream, Action<byte[]> dataReceivedAction, Action disconnectedAction, CancellationToken cancellationToken)
         {
             if (pipeStream == null) throw new ArgumentNullException(nameof(pipeStream));
             if (dataReceivedAction == null) throw new ArgumentNullException(nameof(dataReceivedAction));
 
-            var bufferSize = sizeof(int);
-            var buffer = new byte[bufferSize];
-
-            while (IsConnected && !cancellationToken.IsCancellationRequested)
-            {
-                var readBytes = await pipeStream.ReadAsync(buffer, 0, bufferSize, cancellationToken).ConfigureAwait(false);
-                if (readBytes == 0)
+            Task.Run(
+                async () =>
                 {
-                    if (_wasConnected)
-                    {
-                        HandleDisconnected(disconnectedAction);
-                    }
-                }
-                else
-                {
-                    var dataLength = BitConverter.ToInt32(buffer, 0);
-                    var data = new byte[dataLength];
+                    var bufferSize = sizeof(int);
+                    var buffer = new byte[bufferSize];
 
-                    var readDataBytes = await pipeStream.ReadAsync(data, 0, dataLength, cancellationToken).ConfigureAwait(false);
-                    if (readDataBytes == 0)
+                    while (IsConnected && !cancellationToken.IsCancellationRequested)
                     {
-                        if (_wasConnected)
+                        var readBytes = await pipeStream.ReadAsync(buffer, 0, bufferSize, cancellationToken).ConfigureAwait(false);
+                        if (readBytes == 0)
                         {
-                            HandleDisconnected(disconnectedAction);
+                            if (_wasConnected)
+                            {
+                                HandleDisconnected(disconnectedAction);
+                            }
+                        }
+                        else
+                        {
+                            var dataLength = BitConverter.ToInt32(buffer, 0);
+                            var data = new byte[dataLength];
+
+                            var readDataBytes = await pipeStream.ReadAsync(data, 0, dataLength, cancellationToken).ConfigureAwait(false);
+                            if (readDataBytes == 0)
+                            {
+                                if (_wasConnected)
+                                {
+                                    HandleDisconnected(disconnectedAction);
+                                }
+                            }
+                            else
+                            {
+                                dataReceivedAction(data);
+                            }
                         }
                     }
-                    else
-                    {
-                        dataReceivedAction(data);
-                    }
-                }
-            }
+                },
+                cancellationToken);
         }
 
         private void HandleDisconnected(Action disconnectedAction)
