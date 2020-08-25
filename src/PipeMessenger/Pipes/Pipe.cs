@@ -1,22 +1,21 @@
 ﻿using System;
-using System.IO.Pipes;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace PipeMessenger.Pipes
 {
-    internal abstract class PipeBase : IPipe
+    internal class Pipe : IPipe
     {
-        private readonly Func<PipeStream> _pipeStreamCreator;
+        private readonly Func<IPipeStream> _pipeStreamCreator;
         private readonly CancellationTokenSource _readCancellationTokenSource;
         private readonly CancellationTokenSource _writeCancellationTokenSource;
 
-        private PipeStream _pipeStream;
+        private IPipeStream _pipeStream;
 
         private bool _wasConnected;
 
-        protected PipeBase(Func<PipeStream> pipeStreamCreator)
+        public Pipe(Func<IPipeStream> pipeStreamCreator)
         {
             _pipeStreamCreator = pipeStreamCreator ?? throw new ArgumentNullException(nameof(pipeStreamCreator));
             _readCancellationTokenSource = new CancellationTokenSource();
@@ -27,8 +26,9 @@ namespace PipeMessenger.Pipes
 
         public async void Init(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction, CancellationToken cancellationToken)
         {
+            _pipeStream?.Dispose();
             _pipeStream = _pipeStreamCreator();
-            await ConnectPipeAsync(_pipeStream, cancellationToken).ConfigureAwait(false);
+            await _pipeStream.ConnectAsync(cancellationToken).ConfigureAwait(false);
             connectedAction?.Invoke();
             _wasConnected = true;
             StartPipeObservation(_pipeStream, dataReceivedAction, disconnectedAction, _readCancellationTokenSource.Token);
@@ -36,8 +36,9 @@ namespace PipeMessenger.Pipes
 
         public async void Reconnect(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction)
         {
+            _pipeStream?.Dispose();
             _pipeStream = _pipeStreamCreator();
-            await ConnectPipeAsync(_pipeStream, CancellationToken.None).ConfigureAwait(false);
+            await _pipeStream.ConnectAsync(CancellationToken.None).ConfigureAwait(false);
             connectedAction?.Invoke();
             _wasConnected = true;
             StartPipeObservation(_pipeStream, dataReceivedAction, disconnectedAction, _readCancellationTokenSource.Token);
@@ -60,9 +61,7 @@ namespace PipeMessenger.Pipes
             _pipeStream?.Dispose();
         }
 
-        protected abstract Task ConnectPipeAsync(PipeStream pipeStream, CancellationToken cancellationToken);
-
-        private async void StartPipeObservation(PipeStream pipeStream, Action<byte[]> dataReceivedAction, Action disconnectedAction, CancellationToken cancellationToken)
+        private async void StartPipeObservation(IPipeStream pipeStream, Action<byte[]> dataReceivedAction, Action disconnectedAction, CancellationToken cancellationToken)
         {
             if (pipeStream == null) throw new ArgumentNullException(nameof(pipeStream));
             if (dataReceivedAction == null) throw new ArgumentNullException(nameof(dataReceivedAction));
