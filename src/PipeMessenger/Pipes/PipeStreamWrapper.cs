@@ -16,14 +16,6 @@ namespace PipeMessenger.Pipes
 
         public bool IsConnected => _pipeStream.IsConnected;
 
-        public PipeTransmissionMode ReadMode
-        {
-            get => _pipeStream.ReadMode;
-            set => _pipeStream.ReadMode = value;
-        }
-
-        public bool IsMessageComplete => _pipeStream.IsMessageComplete;
-
         public async Task ConnectAsync(CancellationToken cancellationToken)
         {
             switch (_pipeStream)
