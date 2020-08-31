@@ -8,7 +8,7 @@ namespace PipeMessenger.Contracts
 
         void OnDisconnected();
 
-        void OnMessageWithoutResponse(byte[] payloadBytes);
+        void OnMessage(byte[] payloadBytes);
 
         byte[] OnRequestMessage(byte[] payloadBytes);
     }

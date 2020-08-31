@@ -45,7 +45,7 @@ namespace PipeMessenger.Sample.Common
             var contentBytes = Encoding.UTF8.GetBytes(content);
 
             Console.WriteLine("Sending message");
-            await _messenger.SendWithoutResponseAsync(contentBytes);
+            await _messenger.SendAsync(contentBytes);
             Console.WriteLine("Message sent");
         }
 

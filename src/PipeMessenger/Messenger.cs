@@ -32,7 +32,7 @@ namespace PipeMessenger
             _pipe.StartPipeObservation(OnDataReceived, OnDisconnected);
         }
 
-        public async Task SendWithoutResponseAsync(byte[] payload)
+        public async Task SendAsync(byte[] payload)
         {
             var message = new Message(Guid.NewGuid(), MessageType.FireAndForget, payload);
             var data = MessageSerializer.SerializeMessage(message);
@@ -90,7 +90,7 @@ namespace PipeMessenger
             switch (message.Type)
             {
                 case MessageType.FireAndForget:
-                    _handler.OnMessageWithoutResponse(message.Payload);
+                    _handler.OnMessage(message.Payload);
                     break;
                 case MessageType.Request:
                     var response = _handler.OnRequestMessage(message.Payload);

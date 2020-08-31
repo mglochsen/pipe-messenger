@@ -65,7 +65,7 @@ namespace PipeMessenger.Test
         }
 
         [Fact]
-        public void SendWithoutResponseAsync_ThrowsException_WhenNotConnected()
+        public void SendAsync_ThrowsException_WhenNotConnected()
         {
             // Arrange
             var pipeMock = new Mock<IPipe>();
@@ -74,11 +74,11 @@ namespace PipeMessenger.Test
             var target = CreateMessenger(pipeMock.Object);
 
             // Act and assert
-            new Func<Task>(() => target.SendWithoutResponseAsync(payload)).Should().Throw<InvalidOperationException>();
+            new Func<Task>(() => target.SendAsync(payload)).Should().Throw<InvalidOperationException>();
         }
 
         [Fact]
-        public async Task SendWithoutResponseAsync_WritesMessage()
+        public async Task SendAsync_WritesMessage()
         {
             // Arrange
             var writtenBytes = new byte[0];
@@ -93,7 +93,7 @@ namespace PipeMessenger.Test
             var target = CreateMessenger(pipeMock.Object);
 
             // Act
-            await target.SendWithoutResponseAsync(payload);
+            await target.SendAsync(payload);
 
             // Assert
             pipeMock.Verify(
@@ -250,7 +250,7 @@ namespace PipeMessenger.Test
             dataReceivedAction(serializedMessage);
 
             // Assert
-            handlerMock.Verify(handler => handler.OnMessageWithoutResponse(message.Payload), Times.Once());
+            handlerMock.Verify(handler => handler.OnMessage(message.Payload), Times.Once());
         }
 
         [Fact] public void MessengerHandlesRequestMessages()

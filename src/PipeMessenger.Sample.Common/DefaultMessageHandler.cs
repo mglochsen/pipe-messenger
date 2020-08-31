@@ -20,7 +20,7 @@ namespace PipeMessenger.Sample.Common
             IsConnected = false;
         }
 
-        public virtual void OnMessageWithoutResponse(byte[] payloadBytes)
+        public virtual void OnMessage(byte[] payloadBytes)
         {
             var payload = Encoding.UTF8.GetString(payloadBytes);
             Console.WriteLine($"Received message: {payload}");
