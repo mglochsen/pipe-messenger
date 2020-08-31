@@ -34,7 +34,7 @@ namespace PipeMessenger.Pipes
 
         public void StartPipeObservation(Action<byte[]> dataReceivedAction, Action disconnectedAction)
         {
-            StartPipeObservation(_pipeStream, dataReceivedAction, disconnectedAction, _readCancellationTokenSource.Token);
+            StartPipeObservationTask(dataReceivedAction, disconnectedAction);
         }
 
         public void Reconnect(Action connectedAction, Action disconnectedAction, Action<byte[]> dataReceivedAction)
@@ -70,10 +70,11 @@ namespace PipeMessenger.Pipes
             _wasConnected = true;
         }
 
-        private void StartPipeObservation(IPipeStream pipeStream, Action<byte[]> dataReceivedAction, Action disconnectedAction, CancellationToken cancellationToken)
+        private void StartPipeObservationTask(Action<byte[]> dataReceivedAction, Action disconnectedAction)
         {
-            if (pipeStream == null) throw new ArgumentNullException(nameof(pipeStream));
             if (dataReceivedAction == null) throw new ArgumentNullException(nameof(dataReceivedAction));
+
+            var cancellationToken = _readCancellationTokenSource.Token;
 
             Task.Run(
                 async () =>
@@ -85,12 +86,12 @@ namespace PipeMessenger.Pipes
 
                         do
                         {
-                            var readBytes = await pipeStream.ReadAsync(messageBuffer, 0, messageBuffer.Length).ConfigureAwait(false);
+                            var readBytes = await _pipeStream.ReadAsync(messageBuffer, 0, messageBuffer.Length).ConfigureAwait(false);
                             if (readBytes != 0)
                             {
                                 message.AddRange(messageBuffer.Take(readBytes));
                             }
-                        } while (!pipeStream.IsMessageComplete);
+                        } while (!_pipeStream.IsMessageComplete);
 
                         if (message.Any())
                         {
