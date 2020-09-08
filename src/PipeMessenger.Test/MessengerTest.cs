@@ -13,53 +13,70 @@ namespace PipeMessenger.Test
     public class MessengerTest
     {
         [Fact]
-        public void Init_InitializesPipe()
+        public async Task InitAsync_ConnectsPipe()
         {
             // Arrange
-            var pipeMock = new Mock<IPipe>();
+            var pipeStreamMock = new Mock<IPipeStream>();
             var cancellationToken = new CancellationToken();
-            var target = CreateMessenger(pipeMock.Object);
+            var target = CreateMessenger(pipeStreamMock.Object);
 
             // Act
-            target.Init(cancellationToken);
+            await target.InitAsync(cancellationToken);
 
             // Assert
-            pipeMock.Verify(
-                pipe => pipe.Init(It.IsAny<Action>(), cancellationToken),
+            pipeStreamMock.Verify(
+                pipe => pipe.ConnectAsync(cancellationToken),
                 Times.Once());
         }
 
         [Fact]
-        public void Init_StartsPipeObservation()
+        public async Task InitAsync_InvokesConnectedAtHandler()
         {
             // Arrange
-            var pipeMock = new Mock<IPipe>();
-            var cancellationToken = new CancellationToken();
-            var target = CreateMessenger(pipeMock.Object);
+            var pipeStreamMock = new Mock<IPipeStream>();
+            var handlerMock = new Mock<IMessageHandler>();
+            var target = CreateMessenger(pipeStreamMock.Object, handlerMock.Object);
 
             // Act
-            target.Init(cancellationToken);
+            await target.InitAsync();
 
             // Assert
-            pipeMock.Verify(
-                pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()),
+            handlerMock.Verify(
+                handler => handler.OnConnected(),
                 Times.Once());
         }
 
         [Fact]
-        public void IsConnected_GetsValueFromPipe()
+        public async Task InitAsync_SubscribesToPipe()
         {
             // Arrange
-            var pipeMock = new Mock<IPipe>();
-            pipeMock.SetupGet(pipe => pipe.IsConnected).Returns(true);
-            var target = CreateMessenger(pipeMock.Object);
+            var pipeStreamMock = new Mock<IPipeStream>();
+            var target = CreateMessenger(pipeStreamMock.Object);
+
+            // Act
+            await target.InitAsync();
+
+            // Assert
+            pipeStreamMock.Verify(
+                pipe => pipe.Subscribe(It.IsAny<IObserver<byte[]>>()),
+                Times.Once());
+        }
+
+        [Fact]
+        public async Task IsConnected_GetsValueFromPipe()
+        {
+            // Arrange
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock.SetupGet(pipe => pipe.IsConnected).Returns(true);
+            var target = CreateMessenger(pipeStreamMock.Object);
+            await target.InitAsync();
 
             // Act
             var isConnected = target.IsConnected;
 
             // Assert
             isConnected.Should().BeTrue();
-            pipeMock.VerifyGet(
+            pipeStreamMock.VerifyGet(
                 pipe => pipe.IsConnected,
                 Times.Once());
         }
@@ -68,10 +85,10 @@ namespace PipeMessenger.Test
         public void SendAsync_ThrowsException_WhenNotConnected()
         {
             // Arrange
-            var pipeMock = new Mock<IPipe>();
-            pipeMock.SetupGet(pipe => pipe.IsConnected).Returns(false);
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock.SetupGet(pipe => pipe.IsConnected).Returns(false);
             var payload = new byte[] { 1, 2, 3 };
-            var target = CreateMessenger(pipeMock.Object);
+            var target = CreateMessenger(pipeStreamMock.Object);
 
             // Act and assert
             new Func<Task>(() => target.SendAsync(payload)).Should().Throw<InvalidOperationException>();
@@ -82,22 +99,23 @@ namespace PipeMessenger.Test
         {
             // Arrange
             var writtenBytes = new byte[0];
-            var pipeMock = new Mock<IPipe>();
-            pipeMock
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock
                 .SetupGet(pipe => pipe.IsConnected)
                 .Returns(true);
-            pipeMock
-                .Setup(pipe => pipe.WriteAsync(It.IsAny<byte[]>()))
-                .Callback<byte[]>(bytes => writtenBytes = bytes);
+            pipeStreamMock
+                .Setup(pipe => pipe.WriteAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken?>()))
+                .Callback<byte[], CancellationToken?>((bytes, token) => writtenBytes = bytes);
             var payload = new byte[] { 1, 2, 3 };
-            var target = CreateMessenger(pipeMock.Object);
+            var target = CreateMessenger(pipeStreamMock.Object);
+            await target.InitAsync();
 
             // Act
             await target.SendAsync(payload);
 
             // Assert
-            pipeMock.Verify(
-                pipe => pipe.WriteAsync(It.IsAny<byte[]>()),
+            pipeStreamMock.Verify(
+                pipe => pipe.WriteAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken?>()),
                 Times.Once());
             writtenBytes.Should().HaveCount(17 + payload.Length);
             writtenBytes[16].Should().Be((byte)MessageType.FireAndForget);
@@ -109,30 +127,32 @@ namespace PipeMessenger.Test
         {
             // Arrange
             var writtenBytes = new byte[0];
-            Action<byte[]> dataReceivedAction = null;
+            IObserver<byte[]> pipeObserver = null;
 
             var requestPayload = new byte[] { 1, 2, 3 };
             var responsePayload = new byte[] { 7, 8, 9 };
 
-            var pipeMock = new Mock<IPipe>();
-            pipeMock
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock
                 .SetupGet(pipe => pipe.IsConnected)
                 .Returns(true);
-            pipeMock
-                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
-                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => dataReceivedAction = dataReceived);
-            pipeMock
-                .Setup(pipe => pipe.WriteAsync(It.IsAny<byte[]>()))
-                .Callback<byte[]>(bytes => writtenBytes = bytes);
+            pipeStreamMock
+                .Setup(pipe => pipe.Subscribe(It.IsAny<IObserver<byte[]>>()))
+                .Callback<IObserver<byte[]>>(observer => pipeObserver = observer);
+            pipeStreamMock
+                .Setup(pipe => pipe.WriteAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken?>()))
+                .Callback<byte[], CancellationToken?>((bytes, token) => writtenBytes = bytes)
+                .ReturnsAsync(true);
 
-            var target = CreateMessenger(pipeMock.Object);
-            target.Init(CancellationToken.None);
+            var target = CreateMessenger(pipeStreamMock.Object);
+            await target.InitAsync();
 
             // Act
             var sendRequestTask = target.SendRequestAsync(requestPayload);
             var messageId = MessageSerializer.DeserializeMessage(writtenBytes).Id;
             var responseMessage = new Message(messageId, MessageType.Response, responsePayload);
-            dataReceivedAction(MessageSerializer.SerializeMessage(responseMessage));
+            pipeObserver.OnNext(MessageSerializer.SerializeMessage(responseMessage));
+            pipeObserver.OnCompleted();
             var requestResult = await sendRequestTask;
 
             // Assert
@@ -140,163 +160,146 @@ namespace PipeMessenger.Test
         }
 
         [Fact]
-        public void MessengerInvokesConnectedAtHandler()
+        public async Task MessengerInvokesDisconnectedAtHandler()
         {
             // Arrange
-            Action connectedAction = null;
+            IObserver<byte[]> pipeObserver = null;
 
-            var pipeMock = new Mock<IPipe>();
-            pipeMock
-                .Setup(pipe => pipe.Init(It.IsAny<Action>(), It.IsAny<CancellationToken>()))
-                .Callback<Action, CancellationToken>((connected,token) => connectedAction = connected);
-
-            var handlerMock = new Mock<IMessageHandler>();
-            
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
-            target.Init(CancellationToken.None);
-
-            // Act
-            connectedAction();
-
-            // Assert
-            handlerMock.Verify(handler => handler.OnConnected(), Times.Once());
-        }
-
-        [Fact]
-        public void MessengerInvokesDisconnectedAtHandler()
-        {
-            // Arrange
-            Action disconnectedAction = null;
-
-            var pipeMock = new Mock<IPipe>();
-            pipeMock
-                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
-                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => disconnectedAction = disconnected);
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock
+                .Setup(pipe => pipe.Subscribe(It.IsAny<IObserver<byte[]>>()))
+                .Callback<IObserver<byte[]>>(observer => pipeObserver = observer);
 
             var handlerMock = new Mock<IMessageHandler>();
 
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
-            target.Init(CancellationToken.None);
+            var target = CreateMessenger(pipeStreamMock.Object, handlerMock.Object);
+            await target.InitAsync();
 
             // Act
-            disconnectedAction();
+            pipeObserver.OnNext(null);
+            pipeObserver.OnCompleted();
 
             // Assert
             handlerMock.Verify(handler => handler.OnDisconnected(), Times.Once());
         }
 
         [Fact]
-        public void MessengerDoesNotReconnect_WhenDisabled()
+        public async Task MessengerDoesNotReconnect_WhenDisabled()
         {
             // Arrange
-            Action disconnectedAction = null;
+            IObserver<byte[]> pipeObserver = null;
 
-            var pipeMock = new Mock<IPipe>();
-            pipeMock
-                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
-                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => disconnectedAction = disconnected);
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock
+                .Setup(pipe => pipe.Subscribe(It.IsAny<IObserver<byte[]>>()))
+                .Callback<IObserver<byte[]>>(observer => pipeObserver = observer);
 
             var handlerMock = new Mock<IMessageHandler>();
 
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
-            target.Init(CancellationToken.None);
+            var target = CreateMessenger(pipeStreamMock.Object, handlerMock.Object);
+            await target.InitAsync();
 
             // Act
-            disconnectedAction();
+            pipeObserver.OnNext(null);
+            pipeObserver.OnCompleted();
 
             // Assert
-            pipeMock.Verify(pipe => pipe.Reconnect(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>()), Times.Never());
+            pipeStreamMock.Verify(pipe => pipe.ConnectAsync(It.IsAny<CancellationToken>()), Times.Once());
         }
 
         [Fact]
-        public void MessengerReconnects_WhenEnabled()
+        public async Task MessengerReconnects_WhenEnabled()
         {
             // Arrange
-            Action disconnectedAction = null;
+            IObserver<byte[]> pipeObserver = null;
 
-            var pipeMock = new Mock<IPipe>();
-            pipeMock
-                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
-                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => disconnectedAction = disconnected);
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock
+                .Setup(pipe => pipe.Subscribe(It.IsAny<IObserver<byte[]>>()))
+                .Callback<IObserver<byte[]>>(observer => pipeObserver = observer);
 
             var handlerMock = new Mock<IMessageHandler>();
 
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object, true);
-            target.Init(CancellationToken.None);
+            var target = CreateMessenger(pipeStreamMock.Object, handlerMock.Object, true);
+            await target.InitAsync();
 
             // Act
-            disconnectedAction();
+            pipeObserver.OnNext(null);
+            pipeObserver.OnCompleted();
 
             // Assert
-            pipeMock.Verify(pipe => pipe.Reconnect(It.IsAny<Action>(), It.IsAny<Action>(), It.IsAny<Action<byte[]>>()), Times.Once());
+            pipeStreamMock.Verify(pipe => pipe.ConnectAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
 
-        [Fact] public void MessengerHandlesFireAndForgetMessages()
+        [Fact] public async Task MessengerHandlesFireAndForgetMessages()
         {
             // Arrange
-            Action<byte[]> dataReceivedAction = null;
+            IObserver<byte[]> pipeObserver = null;
             var message = new Message(Guid.NewGuid(), MessageType.FireAndForget, new byte[] { 1, 2, 3 });
             var serializedMessage = MessageSerializer.SerializeMessage(message);
 
-            var pipeMock = new Mock<IPipe>();
-            pipeMock
-                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
-                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => dataReceivedAction = dataReceived);
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock
+                .Setup(pipe => pipe.Subscribe(It.IsAny<IObserver<byte[]>>()))
+                .Callback<IObserver<byte[]>>(observer => pipeObserver = observer);
             var handlerMock = new Mock<IMessageHandler>();
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
-            target.Init(CancellationToken.None);
+            var target = CreateMessenger(pipeStreamMock.Object, handlerMock.Object);
+            await target.InitAsync();
 
             // Act
-            dataReceivedAction(serializedMessage);
+            pipeObserver.OnNext(serializedMessage);
+            pipeObserver.OnCompleted();
 
             // Assert
             handlerMock.Verify(handler => handler.OnMessage(message.Payload), Times.Once());
         }
 
-        [Fact] public void MessengerHandlesRequestMessages()
+        [Fact] public async Task MessengerHandlesRequestMessages()
         {
             // Arrange
-            Action<byte[]> dataReceivedAction = null;
+            IObserver<byte[]> pipeObserver = null;
             var message = new Message(Guid.NewGuid(), MessageType.Request, new byte[] { 1, 2, 3 });
             var serializedMessage = MessageSerializer.SerializeMessage(message);
 
-            var pipeMock = new Mock<IPipe>();
-            pipeMock
+            var pipeStreamMock = new Mock<IPipeStream>();
+            pipeStreamMock
                 .SetupGet(pipe => pipe.IsConnected)
                 .Returns(true);
-            pipeMock
-                .Setup(pipe => pipe.StartPipeObservation(It.IsAny<Action<byte[]>>(), It.IsAny<Action>()))
-                .Callback<Action<byte[]>, Action>((dataReceived, disconnected) => dataReceivedAction = dataReceived);
+            pipeStreamMock
+                .Setup(pipe => pipe.Subscribe(It.IsAny<IObserver<byte[]>>()))
+                .Callback<IObserver<byte[]>>(observer => pipeObserver = observer);
             var handlerMock = new Mock<IMessageHandler>();
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
-            target.Init(CancellationToken.None);
+            var target = CreateMessenger(pipeStreamMock.Object, handlerMock.Object);
+            await target.InitAsync();
 
             // Act
-            dataReceivedAction(serializedMessage);
+            pipeObserver.OnNext(serializedMessage);
+            pipeObserver.OnCompleted();
 
             // Assert
             handlerMock.Verify(handler => handler.OnRequestMessage(message.Payload), Times.Once());
         }
 
-        [Fact] public void Dispose_DisposesObjects()
+        [Fact] public async Task Dispose_DisposesObjects()
         {
             // Arrange
-            var pipeMock = new Mock<IPipe>();
+            var pipeStreamMock = new Mock<IPipeStream>();
             var handlerMock = new Mock<IMessageHandler>();
-            var target = CreateMessenger(pipeMock.Object, handlerMock.Object);
+            var target = CreateMessenger(pipeStreamMock.Object, handlerMock.Object);
+            await target.InitAsync();
 
             // Act
             target.Dispose();
 
             // Assert
-            pipeMock.Verify(pipe => pipe.Dispose(), Times.Once());
+            pipeStreamMock.Verify(pipe => pipe.Dispose(), Times.Once());
             handlerMock.Verify(handler => handler.Dispose(), Times.Once());
         }
 
-        private static Messenger CreateMessenger(IPipe pipe, IMessageHandler handler = null, bool enableReconnect = false)
+        private static Messenger CreateMessenger(IPipeStream pipeStream, IMessageHandler handler = null, bool enableReconnect = false)
         {
             return new Messenger(
-                () => pipe,
+                () => pipeStream,
                 handler ?? new Mock<IMessageHandler>().Object,
                 enableReconnect);
         }

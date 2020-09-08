@@ -17,13 +17,13 @@ namespace PipeMessenger
         /// <summary>
         /// Initializes the messenger.
         /// </summary>
-        void Init(CancellationToken? cancellationToken = null);
+        Task InitAsync(CancellationToken? cancellationToken = null);
 
         /// <summary>
         /// Sends a message (fire and forget).
         /// </summary>
         /// <param name="payload">Message payload</param>
-        Task SendAsync(byte[] payload);
+        Task<bool> SendAsync(byte[] payload);
 
         /// <summary>
         /// Sends a request message and waits for its response.

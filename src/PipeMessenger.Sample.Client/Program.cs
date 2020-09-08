@@ -20,7 +20,7 @@ namespace PipeMessenger.Sample.Client
             _messenger = MessengerFactory.CreateClientMessenger("SampleMessenger", handler, true);
 
             Console.WriteLine("Initializing client messenger");
-            _messenger.Init(_cancellationToken);
+            await _messenger.InitAsync(_cancellationToken);
 
             var consoleMessenger = new ConsoleMessenger();
             await consoleMessenger.StartAsync(_messenger);

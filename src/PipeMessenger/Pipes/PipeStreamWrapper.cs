@@ -1,5 +1,8 @@
 ﻿using System;
+using System.IO;
 using System.IO.Pipes;
+using System.Linq;
+using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,21 +34,60 @@ namespace PipeMessenger.Pipes
             }
         }
 
-        public async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken? cancellationToken = null)
-        {
-            return await _pipeStream.ReadAsync(buffer, offset, count, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
-        }
-
-        public async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken? cancellationToken = null)
+        public async Task<bool> WriteAsync(byte[] data, CancellationToken? cancellationToken = null)
         {
             var token = cancellationToken ?? CancellationToken.None;
-            await _pipeStream.WriteAsync(buffer, offset, count, token).ConfigureAwait(false);
-            await _pipeStream.FlushAsync(token).ConfigureAwait(false);
+            var dataLength = BitConverter.GetBytes(data.Length);
+            var dataWithLength = dataLength.Concat(data).ToArray();
+
+            try
+            {
+                await _pipeStream.WriteAsync(dataWithLength, 0, dataWithLength.Length, token).ConfigureAwait(false);
+                await _pipeStream.FlushAsync(token).ConfigureAwait(false);
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        }
+
+        public IDisposable Subscribe(IObserver<byte[]> observer)
+        {
+            return Observable.FromAsync(ReadAsync).Repeat().TakeUntil(data => data == null).Subscribe(observer);
         }
 
         public void Dispose()
         {
             _pipeStream.Dispose();
+        }
+
+        private async Task<byte[]> ReadAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                var dataLengthBuffer = new byte[sizeof(int)];
+
+                var readBytes = await _pipeStream.ReadAsync(dataLengthBuffer, 0, dataLengthBuffer.Length, cancellationToken).ConfigureAwait(false);
+                if (readBytes == 0)
+                {
+                    return null;
+                }
+
+                var dataLength = BitConverter.ToInt32(dataLengthBuffer, 0);
+                var data = new byte[dataLength];
+                readBytes = await _pipeStream.ReadAsync(data, 0, data.Length, cancellationToken).ConfigureAwait(false);
+                if (readBytes == 0)
+                {
+                    return null;
+                }
+
+                return data;
+            }
+            catch (ObjectDisposedException)
+            {
+                return null;
+            }
         }
     }
 }

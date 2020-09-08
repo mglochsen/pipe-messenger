@@ -56,7 +56,7 @@ namespace PipeMessenger.Sample.Common
 
             Console.WriteLine("Sending request");
             var responseBytes = await _messenger.SendRequestAsync(contentBytes);
-            var response = Encoding.UTF8.GetString(responseBytes);
+            var response = responseBytes == null ? "[null]" : Encoding.UTF8.GetString(responseBytes);
             Console.WriteLine($"Returned response: {response}");
         }
     }

@@ -10,33 +10,42 @@ namespace PipeMessenger
 {
     public sealed class Messenger : IMessenger
     {
-        private readonly IPipe _pipe;
+        private readonly Func<IPipeStream> _pipeStreamCreator;
         private readonly IMessageHandler _handler;
         private readonly bool _enableReconnect;
 
+        private IPipeStream _pipeStream;
+
         private readonly IDictionary<Guid, TaskCompletionSource<byte[]>> _pendingRequests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>();
 
-        internal Messenger(Func<IPipe> pipeCreator, IMessageHandler handler, bool enableReconnect)
+        internal Messenger(Func<IPipeStream> pipeStreamCreator, IMessageHandler handler, bool enableReconnect)
         {
+            _pipeStreamCreator = pipeStreamCreator ?? throw new ArgumentNullException(nameof(pipeStreamCreator));
             _handler = handler ?? throw new ArgumentNullException(nameof(handler));
             _enableReconnect = enableReconnect;
-            _pipe = pipeCreator();
         }
 
-        public bool IsConnected => _pipe.IsConnected;
+        public bool IsConnected => _pipeStream?.IsConnected ?? false;
 
-        public void Init(CancellationToken? cancellationToken = null)
+        public async Task InitAsync(CancellationToken? cancellationToken = null)
         {
             var token = cancellationToken ?? CancellationToken.None;
-            _pipe.Init(OnConnected, token);
-            _pipe.StartPipeObservation(OnDataReceived, OnDisconnected);
+            _pipeStream?.Dispose();
+            _pipeStream = _pipeStreamCreator();
+            await _pipeStream.ConnectAsync(token).ConfigureAwait(false);
+            OnConnected();
+            _pipeStream.Subscribe(
+                OnDataReceived,
+                ex => { },
+                () => { },
+                token);
         }
 
-        public async Task SendAsync(byte[] payload)
+        public async Task<bool> SendAsync(byte[] payload)
         {
             var message = new Message(Guid.NewGuid(), MessageType.FireAndForget, payload);
             var data = MessageSerializer.SerializeMessage(message);
-            await WriteAsync(data).ConfigureAwait(false);
+            return await WriteAsync(data).ConfigureAwait(false);
         }
 
         public async Task<byte[]> SendRequestAsync(byte[] payload)
@@ -44,7 +53,11 @@ namespace PipeMessenger
             var message = new Message(Guid.NewGuid(), MessageType.Request, payload);
             var data = MessageSerializer.SerializeMessage(message);
 
-            await WriteAsync(data).ConfigureAwait(false);
+            var dataWritten = await WriteAsync(data).ConfigureAwait(false);
+            if (!dataWritten)
+            {
+                return null;
+            }
 
             var tsc = new TaskCompletionSource<byte[]>();
             _pendingRequests.Add(message.Id, tsc);
@@ -56,17 +69,17 @@ namespace PipeMessenger
         {
             _handler.Dispose();
             _pendingRequests.Clear();
-            _pipe?.Dispose();
+            _pipeStream?.Dispose();
         }
 
-        private async Task WriteAsync(byte[] data)
+        private async Task<bool> WriteAsync(byte[] data)
         {
             if (!IsConnected)
             {
                 throw new InvalidOperationException("Messenger is not connected");
             }
 
-            await _pipe.WriteAsync(data).ConfigureAwait(false);
+            return await _pipeStream.WriteAsync(data).ConfigureAwait(false);
         }
 
         private void OnConnected()
@@ -74,18 +87,24 @@ namespace PipeMessenger
             _handler.OnConnected();
         }
 
-        private void OnDisconnected()
+        private async void OnDisconnected()
         {
             _handler.OnDisconnected();
 
             if (_enableReconnect)
             {
-                _pipe.Reconnect(OnConnected, OnDisconnected, OnDataReceived);
+                await InitAsync().ConfigureAwait(false);
             }
         }
 
         private async void OnDataReceived(byte[] data)
         {
+            if (data == null)
+            {
+                OnDisconnected();
+                return;
+            }
+
             var message = MessageSerializer.DeserializeMessage(data);
             switch (message.Type)
             {
