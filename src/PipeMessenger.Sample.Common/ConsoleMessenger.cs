@@ -51,6 +51,12 @@ namespace PipeMessenger.Sample.Common
 
         private async Task SendRequestAsync()
         {
+            if (!_messenger.IsConnected)
+            {
+                Console.WriteLine("Unable to send a request: Messenger is not connected.");
+                return;
+            }
+
             var content = $"Sample request {Guid.NewGuid()}";
             var contentBytes = Encoding.UTF8.GetBytes(content);
 

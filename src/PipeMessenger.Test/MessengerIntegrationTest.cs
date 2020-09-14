@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -17,7 +18,7 @@ namespace PipeMessenger.Test
         public async Task SendMessage_ServerToClient()
         {
             // Arrange
-            string messengerName = Path.GetRandomFileName();
+            string messengerName = GetMessengerName();
             var message = Encoding.UTF8.GetBytes(Path.GetRandomFileName());
 
             var serverMessageHandler = new TestMessageHandler();
@@ -45,7 +46,7 @@ namespace PipeMessenger.Test
         public async Task SendMessage_ClientToServer()
         {
             // Arrange
-            string messengerName = Path.GetRandomFileName();
+            string messengerName = GetMessengerName();
             var message = Encoding.UTF8.GetBytes(Path.GetRandomFileName());
 
             var serverMessageHandler = new TestMessageHandler();
@@ -73,7 +74,7 @@ namespace PipeMessenger.Test
         public async Task SendRequest_ServerToClient()
         {
             // Arrange
-            string messengerName = Path.GetRandomFileName();
+            string messengerName = GetMessengerName();
             var message = Encoding.UTF8.GetBytes(Path.GetRandomFileName());
             var expectedResponse = Encoding.UTF8.GetBytes(Path.GetRandomFileName());
 
@@ -102,7 +103,7 @@ namespace PipeMessenger.Test
         public async Task SendRequest_ClientToServer()
         {
             // Arrange
-            string messengerName = Path.GetRandomFileName();
+            string messengerName = GetMessengerName();
             var message = Encoding.UTF8.GetBytes(Path.GetRandomFileName());
             var expectedResponse = Encoding.UTF8.GetBytes(Path.GetRandomFileName());
 
@@ -124,6 +125,11 @@ namespace PipeMessenger.Test
 
             // Assert
             response.Should().BeEquivalentTo(expectedResponse);
+        }
+
+        private static string GetMessengerName([CallerMemberName] string caller = null)
+        {
+            return $"Messenger_{caller}";
         }
 
         private class TestMessageHandler : IMessageHandler
