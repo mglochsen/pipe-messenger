@@ -37,6 +37,12 @@ namespace PipeMessenger.Sample.Common
             return responseBytes;
         }
 
+        public void OnResponseMessage(Guid id, byte[] payloadBytes)
+        {
+            var payload = Encoding.UTF8.GetString(payloadBytes);
+            Console.WriteLine($"Received response {id}: {payload}");
+        }
+
         public virtual void Dispose()
         {
         }

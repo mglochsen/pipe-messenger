@@ -80,14 +80,14 @@ namespace PipeMessenger.Test
 
             var serverMessageHandler = new TestMessageHandler();
             var serverMessenger = MessengerFactory.CreateServerMessenger(messengerName, serverMessageHandler, false);
-            var clientMessageHandler = new TestMessageHandler { ResponsePayload = expectedResponse };
+            var clientMessageHandler = new TestMessageHandler { ResponseToReturn = expectedResponse };
             var clientMessenger = MessengerFactory.CreateClientMessenger(messengerName, clientMessageHandler, false);
             
             var initTasks = new[] { serverMessenger.InitAsync(), clientMessenger.InitAsync() };
 
             // Act
             await Task.WhenAll(initTasks);
-            var response = await serverMessenger.SendRequestAsync(message);
+            var requestId = await serverMessenger.SendRequestAsync(message);
 
             await Task.Delay(TimeSpan.FromSeconds(1));
 
@@ -95,7 +95,9 @@ namespace PipeMessenger.Test
             clientMessenger.Dispose();
 
             // Assert
-            response.Should().BeEquivalentTo(expectedResponse);
+            requestId.Should().NotBeNull();
+            serverMessageHandler.ReceivedResponse.Item1.Should().Be(requestId.GetValueOrDefault());
+            serverMessageHandler.ReceivedResponse.Item2.Should().BeEquivalentTo(expectedResponse);
         }
 
         [Fact]
@@ -107,16 +109,16 @@ namespace PipeMessenger.Test
             var message = Encoding.UTF8.GetBytes(Path.GetRandomFileName());
             var expectedResponse = Encoding.UTF8.GetBytes(Path.GetRandomFileName());
 
-            var serverMessageHandler = new TestMessageHandler { ResponsePayload = expectedResponse };
+            var serverMessageHandler = new TestMessageHandler { ResponseToReturn = expectedResponse };
             var serverMessenger = MessengerFactory.CreateServerMessenger(messengerName, serverMessageHandler, false);
             var clientMessageHandler = new TestMessageHandler();
             var clientMessenger = MessengerFactory.CreateClientMessenger(messengerName, clientMessageHandler, false);
-            
+
             var initTasks = new[] { serverMessenger.InitAsync(), clientMessenger.InitAsync() };
 
             // Act
             await Task.WhenAll(initTasks);
-            var response = await clientMessenger.SendRequestAsync(message);
+            var requestId = await clientMessenger.SendRequestAsync(message);
 
             await Task.Delay(TimeSpan.FromSeconds(1));
 
@@ -124,7 +126,9 @@ namespace PipeMessenger.Test
             clientMessenger.Dispose();
 
             // Assert
-            response.Should().BeEquivalentTo(expectedResponse);
+            requestId.Should().NotBeNull();
+            clientMessageHandler.ReceivedResponse.Item1.Should().Be(requestId.GetValueOrDefault());
+            clientMessageHandler.ReceivedResponse.Item2.Should().BeEquivalentTo(expectedResponse);
         }
 
         private static string GetMessengerName([CallerMemberName] string caller = null)
@@ -138,7 +142,9 @@ namespace PipeMessenger.Test
 
             public IEnumerable<byte[]> ReceivedMessages => _receivedMessages;
 
-            public byte[] ResponsePayload { get; set; }
+            public byte[] ResponseToReturn { get; set; }
+
+            public Tuple<Guid, byte[]> ReceivedResponse { get; set; }
 
             public void OnConnected()
             {
@@ -155,7 +161,12 @@ namespace PipeMessenger.Test
 
             public byte[] OnRequestMessage(byte[] payloadBytes)
             {
-                return ResponsePayload;
+                return ResponseToReturn;
+            }
+
+            public void OnResponseMessage(Guid id, byte[] payloadBytes)
+            {
+                ReceivedResponse = new Tuple<Guid, byte[]>(id, payloadBytes);
             }
 
             public void Dispose()

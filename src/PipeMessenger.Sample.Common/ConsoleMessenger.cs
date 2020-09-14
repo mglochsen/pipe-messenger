@@ -57,13 +57,13 @@ namespace PipeMessenger.Sample.Common
                 return;
             }
 
-            var content = $"Sample request {Guid.NewGuid()}";
+            var content = "Sample request";
             var contentBytes = Encoding.UTF8.GetBytes(content);
 
             Console.WriteLine("Sending request");
-            var responseBytes = await _messenger.SendRequestAsync(contentBytes);
-            var response = responseBytes == null ? "[null]" : Encoding.UTF8.GetString(responseBytes);
-            Console.WriteLine($"Returned response: {response}");
+            var requestId = await _messenger.SendRequestAsync(contentBytes);
+            var id = requestId == null ? "[null]" : requestId.ToString();
+            Console.WriteLine($"Request id: {id}");
         }
     }
 }

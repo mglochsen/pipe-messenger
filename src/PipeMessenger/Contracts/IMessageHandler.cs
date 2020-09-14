@@ -11,5 +11,7 @@ namespace PipeMessenger.Contracts
         void OnMessage(byte[] payloadBytes);
 
         byte[] OnRequestMessage(byte[] payloadBytes);
+
+        void OnResponseMessage(Guid id, byte[] payloadBytes);
     }
 }

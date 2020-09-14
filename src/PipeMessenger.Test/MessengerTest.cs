@@ -123,11 +123,10 @@ namespace PipeMessenger.Test
         }
 
         [Fact]
-        public async Task SendRequestAsync_GetsExpectedResponse()
+        public async Task SendRequestAsync_ReturnsMessageId()
         {
             // Arrange
             var writtenBytes = new byte[0];
-            IObserver<byte[]> pipeObserver = null;
 
             var requestPayload = new byte[] { 1, 2, 3 };
             var responsePayload = new byte[] { 7, 8, 9 };
@@ -137,9 +136,6 @@ namespace PipeMessenger.Test
                 .SetupGet(pipe => pipe.IsConnected)
                 .Returns(true);
             pipeStreamMock
-                .Setup(pipe => pipe.Subscribe(It.IsAny<IObserver<byte[]>>()))
-                .Callback<IObserver<byte[]>>(observer => pipeObserver = observer);
-            pipeStreamMock
                 .Setup(pipe => pipe.WriteAsync(It.IsAny<byte[]>(), It.IsAny<CancellationToken?>()))
                 .Callback<byte[], CancellationToken?>((bytes, token) => writtenBytes = bytes)
                 .ReturnsAsync(true);
@@ -148,15 +144,11 @@ namespace PipeMessenger.Test
             await target.InitAsync();
 
             // Act
-            var sendRequestTask = target.SendRequestAsync(requestPayload);
-            var messageId = MessageSerializer.DeserializeMessage(writtenBytes).Id;
-            var responseMessage = new Message(messageId, MessageType.Response, responsePayload);
-            pipeObserver.OnNext(MessageSerializer.SerializeMessage(responseMessage));
-            pipeObserver.OnCompleted();
-            var requestResult = await sendRequestTask;
+            var requestId = await target.SendRequestAsync(requestPayload);
 
             // Assert
-            requestResult.Should().BeEquivalentTo(responsePayload);
+            var messageId = MessageSerializer.DeserializeMessage(writtenBytes).Id;
+            requestId.Should().Be(messageId);
         }
 
         [Fact]

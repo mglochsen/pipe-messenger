@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PipeMessenger.Contracts;
@@ -15,8 +13,6 @@ namespace PipeMessenger
         private readonly bool _enableReconnect;
 
         private IPipeStream _pipeStream;
-
-        private readonly IDictionary<Guid, TaskCompletionSource<byte[]>> _pendingRequests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>();
 
         internal Messenger(Func<IPipeStream> pipeStreamCreator, IMessageHandler handler, bool enableReconnect)
         {
@@ -48,7 +44,7 @@ namespace PipeMessenger
             return await WriteAsync(data).ConfigureAwait(false);
         }
 
-        public async Task<byte[]> SendRequestAsync(byte[] payload)
+        public async Task<Guid?> SendRequestAsync(byte[] payload)
         {
             var message = new Message(Guid.NewGuid(), MessageType.Request, payload);
             var data = MessageSerializer.SerializeMessage(message);
@@ -59,16 +55,12 @@ namespace PipeMessenger
                 return null;
             }
 
-            var tsc = new TaskCompletionSource<byte[]>();
-            _pendingRequests.Add(message.Id, tsc);
-
-            return await tsc.Task.ConfigureAwait(false);
+            return message.Id;
         }
 
         public void Dispose()
         {
             _handler.Dispose();
-            _pendingRequests.Clear();
             _pipeStream?.Dispose();
         }
 
@@ -118,12 +110,7 @@ namespace PipeMessenger
                     await WriteAsync(responseData).ConfigureAwait(false);
                     break;
                 case MessageType.Response:
-                    if (_pendingRequests.TryGetValue(message.Id, out var pendingRequest))
-                    {
-                        _pendingRequests.Remove(message.Id);
-                        pendingRequest.SetResult(message.Payload);
-                    }
-
+                    _handler.OnResponseMessage(message.Id, message.Payload);
                     break;
             }
         }

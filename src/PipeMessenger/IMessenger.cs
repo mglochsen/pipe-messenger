@@ -26,10 +26,10 @@ namespace PipeMessenger
         Task<bool> SendAsync(byte[] payload);
 
         /// <summary>
-        /// Sends a request message and waits for its response.
+        /// Sends a request message and returns a id to be able to identify its response.
         /// </summary>
         /// <param name="payload">Request message payload</param>
-        /// <returns>Response message payload</returns>
-        Task<byte[]> SendRequestAsync(byte[] payload);
+        /// <returns>Id of response</returns>
+        Task<Guid?> SendRequestAsync(byte[] payload);
     }
 }
