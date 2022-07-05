@@ -91,7 +91,7 @@ namespace PipeMessenger.Test
             var target = CreateMessenger(pipeStreamMock.Object);
 
             // Act and assert
-            new Func<Task>(() => target.SendAsync(payload)).Should().Throw<InvalidOperationException>();
+            new Func<Task>(() => target.SendAsync(payload)).Should().ThrowAsync<InvalidOperationException>();
         }
 
         [Fact]
@@ -223,7 +223,8 @@ namespace PipeMessenger.Test
             pipeStreamMock.Verify(pipe => pipe.ConnectAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
 
-        [Fact] public async Task MessengerHandlesFireAndForgetMessages()
+        [Fact]
+        public async Task MessengerHandlesFireAndForgetMessages()
         {
             // Arrange
             IObserver<byte[]> pipeObserver = null;
@@ -246,7 +247,8 @@ namespace PipeMessenger.Test
             handlerMock.Verify(handler => handler.OnMessage(message.Payload), Times.Once());
         }
 
-        [Fact] public async Task MessengerHandlesRequestMessages()
+        [Fact]
+        public async Task MessengerHandlesRequestMessages()
         {
             // Arrange
             IObserver<byte[]> pipeObserver = null;
@@ -272,7 +274,8 @@ namespace PipeMessenger.Test
             handlerMock.Verify(handler => handler.OnRequestMessage(message.Payload), Times.Once());
         }
 
-        [Fact] public async Task Dispose_DisposesObjects()
+        [Fact]
+        public async Task Dispose_DisposesObjects()
         {
             // Arrange
             var pipeStreamMock = new Mock<IPipeStream>();
